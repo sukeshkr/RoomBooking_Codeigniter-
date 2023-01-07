@@ -1,0 +1,204 @@
+<?php
+
+Class Room_model extends CI_Model {
+
+    public function __construct() {
+        parent::__construct();
+        
+    }
+
+
+    var $table = 'room';
+    var $column_order = array('room_no','rate', 'location'); //set column field database for datatable orderable
+    var $column_search = array('room_no','rate', 'location'); //set column field database for datatable searchable just firstname , lastname , address are searchable
+    var $order = array('id' => 'desc'); // default order 
+
+
+
+    private function get_datatables_query()
+    {
+        $this->db->from($this->table);
+        $i = 0;
+        foreach ($this->column_search as $item) // loop column 
+        {
+        if($_POST['search']['value']) // if datatable send POST for search
+        {
+        if($i===0) // first loop
+        {
+        $this->db->group_start(); // open bracket. query Where with OR clause better with bracket. because maybe can combine with other WHERE with AND.
+        $this->db->like($item, $_POST['search']['value']);
+        }
+        else
+        {
+        $this->db->or_like($item, $_POST['search']['value']);
+        }
+
+        if(count($this->column_search) - 1 == $i) //last loop
+        $this->db->group_end(); //close bracket
+        }
+        $i++;
+        }
+
+        if(isset($_POST['order'])) // here order processing
+        {
+        $this->db->order_by($this->column_order[$_POST['order']['0']['column']], $_POST['order']['0']['dir']);
+        } 
+        else if(isset($this->order))
+        {
+        $order = $this->order;
+        $this->db->order_by(key($order), $order[key($order)]);
+        }
+    }
+
+
+    public function get_datatables() {
+
+        $this->get_datatables_query();
+        if($_POST['length'] != -1)
+        $this->db->limit($_POST['length'], $_POST['start']);
+        $query = $this->db->get();
+        return $query->result();
+    }
+
+    public function count_filtered() {
+
+        $this->get_datatables_query();
+        $query = $this->db->get();
+        return $query->num_rows();
+    }
+
+    public function count_all() {
+
+        $this->db->from($this->table);
+        return $this->db->count_all_results();
+    }
+
+    public function get_by_id($id) {
+
+        $this->db->from($this->table);
+        $this->db->where('id',$id);
+        $query = $this->db->get();
+        return $query->row();
+    }
+
+    public function insertRoomData($value,$file='',$facility='') {
+
+        $this->db->insert($this->table, $value);     
+
+        $insert_id = $this->db->insert_id();
+
+        if(!empty($facility[0])) {
+
+            foreach($facility as  $index => $facilities) {
+
+                $value_file= array('room_id' => $insert_id,'room_facility' => $facilities);
+                $this->db->insert('multiple_room_facility', $value_file);
+            }
+
+        } 
+
+        if(!empty($file[0])) {
+
+            foreach($file as  $index => $files) {
+
+                $value_file= array('room_id' => $insert_id,'room_image' => $files);
+                $this->db->insert('room_images', $value_file);
+            }
+
+        }  
+    }
+
+    public function viewData($id) {
+
+        $this->db->select('*');
+        $this->db->from($this->table);
+        $this->db->where('id', $id);
+        $query = $this->db->get();
+        return $query->result();
+    }
+
+    public function viewImageData($id) {
+        
+        $this->db->select('*');
+        $this->db->from('room_images');
+        $this->db->where('room_id', $id);
+        $query = $this->db->get();
+        return $query->result();
+    }
+
+    public function viewFacilityData($id) {
+        
+        $this->db->select('room_facility.id,multiple_room_facility.id as selected_id,room_facility.facility');
+        $this->db->from('multiple_room_facility');
+        $this->db->join('room_facility', 'multiple_room_facility.room_facility = room_facility.id');
+        $this->db->where('room_id', $id);
+        $query = $this->db->get();
+        return $query->result();
+    }
+
+    public function updateRoomsData($id='',$value='',$multi_images='',$facility='') {
+
+        $this->db->where('id', $id);
+        $this->db->update('room', $value);
+
+        if(!empty($multi_images[0])) {
+
+            foreach($multi_images as  $index => $files) {
+
+                $value_file= array('room_id' => $id,'room_image' => $files);
+                $this->db->insert('room_images', $value_file);
+            }
+
+        }  
+
+        if(!empty($facility[0])) {
+
+            foreach($facility as  $index => $facilities) {
+
+                $value_file= array('room_id' => $id,'room_facility' => $facilities);
+                $this->db->insert('multiple_room_facility', $value_file);
+            }
+
+        } 
+        
+    }
+
+    public function delete($id,$name) {
+        $this->db->trans_start();
+        $this->db->delete($this->table, array('id' => $id));
+        unlink("uploads/room/" . $name);
+        $this->db->trans_complete();
+    }
+
+
+    public function getRoomTypeData() {
+
+        $this->db->select('room_type.id,room_type.type_name');
+        $this->db->from('room_type');
+        $query = $this->db->get();
+        return $query->result();
+    }
+
+    public function getRoomFacilityData() {
+
+        $this->db->select('room_facility.id,room_facility.facility');
+        $this->db->from('room_facility');
+        $query = $this->db->get();
+        return $query->result();
+    }
+
+    public function deleteImage($id) {
+        
+        $this->db->delete('room_images', array('id' => $id));
+
+    }
+
+    public function deleteFacilityList($id)
+    {
+        $this->db->where('id',$id);
+        $this->db->delete('multiple_room_facility'); 
+    }
+  
+
+}
+     
